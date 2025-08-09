@@ -114,76 +114,202 @@ ResumeToolDescription = RichToolDescription(
     side_effects=None,
 )
 
+
 @mcp.tool(description=ResumeToolDescription.model_dump_json())
 async def resume() -> str:
-    """
-    Return your resume exactly as markdown text.
+    """Return your resume exactly as markdown text."""
+    logger.info("📄 Resume tool called - DEBUGGING MODE")
     
-    This function processes your actual resume file and converts it to markdown.
-    """
+    # List ALL files in the current directory
     try:
-        # Method 1: Process PDF file
-        resume_path = Path("resume.pdf")  # You'll upload this file
+        current_path = Path(".")
+        all_files = list(current_path.rglob("*"))  # Recursive search
+        logger.info(f"📁 ALL FILES IN DEPLOYMENT:")
+        for file_path in all_files:
+            if file_path.is_file():
+                size = file_path.stat().st_size
+                logger.info(f"   📄 {file_path} ({size} bytes)")
+    except Exception as e:
+        logger.error(f"❌ Error listing files: {e}")
+    
+    # Check specifically for resume files
+    possible_names = [
+        "resume.pdf", "resume.docx", "resume.txt", "resume.md",
+        "bhushan-anokar-resume.pdf", "Bhushan-Anokar-Resume.pdf",
+        "BHUSHAN-ANOKAR-RESUME.pdf", "Resume.pdf", "RESUME.pdf"
+    ]
+    
+    logger.info(f"🔍 Checking for these resume filenames:")
+    for name in possible_names:
+        path = Path(name)
+        exists = path.exists()
+        logger.info(f"   📄 {name}: {'✅ EXISTS' if exists else '❌ NOT FOUND'}")
+        if exists:
+            size = path.stat().st_size
+            logger.info(f"      📊 Size: {size} bytes")
+    
+    # Try to process any found resume file
+    for filename in possible_names:
+        resume_path = Path(filename)
         
-        if resume_path.exists() and resume_path.suffix.lower() == '.pdf':
-            try:
-                import PyPDF2
-                with open(resume_path, 'rb') as file:
-                    pdf_reader = PyPDF2.PdfReader(file)
-                    text = ""
-                    for page in pdf_reader.pages:
-                        text += page.extract_text() + "\n"
-                
-                # Convert extracted text to better markdown format
-                return format_resume_as_markdown(text)
-                
-            except ImportError:
-                return "Error: PyPDF2 not available for PDF processing"
-        
-        # Method 2: Process DOCX file
-        resume_path = Path("resume.docx")
-        if resume_path.exists() and resume_path.suffix.lower() == '.docx':
-            try:
-                from docx import Document
-                doc = Document(resume_path)
-                text = ""
-                for paragraph in doc.paragraphs:
-                    text += paragraph.text + "\n"
-                
-                return format_resume_as_markdown(text)
-                
-            except ImportError:
-                return "Error: python-docx not available for DOCX processing"
-        
-        # Method 3: Process plain text file
-        resume_path = Path("resume.txt")
         if resume_path.exists():
-            with open(resume_path, 'r', encoding='utf-8') as file:
-                text = file.read()
-            return format_resume_as_markdown(text)
-        
-        # Method 4: Process markdown file directly
-        resume_path = Path("resume.md")
-        if resume_path.exists():
-            with open(resume_path, 'r', encoding='utf-8') as file:
-                return file.read()
-        
-        # Fallback: No resume file found
-        return """
-# Resume Not Found
+            logger.info(f"✅ Processing: {filename}")
+            file_size = resume_path.stat().st_size
+            logger.info(f"📊 File size: {file_size} bytes")
+            
+            try:
+                if filename.lower().endswith('.pdf'):
+                    logger.info("📄 Attempting PDF processing...")
+                    try:
+                        import PyPDF2
+                        logger.info("✅ PyPDF2 imported successfully")
+                        
+                        with open(resume_path, 'rb') as file:
+                            pdf_reader = PyPDF2.PdfReader(file)
+                            logger.info(f"📄 PDF has {len(pdf_reader.pages)} pages")
+                            
+                            text = ""
+                            for i, page in enumerate(pdf_reader.pages):
+                                try:
+                                    page_text = page.extract_text()
+                                    logger.info(f"📄 Page {i+1}: extracted {len(page_text)} characters")
+                                    logger.info(f"📄 Page {i+1} preview: {page_text[:200]}")
+                                    text += page_text + "\n"
+                                except Exception as page_error:
+                                    logger.error(f"❌ Error extracting page {i+1}: {page_error}")
+                        
+                        logger.info(f"📄 Total extracted: {len(text)} characters")
+                        
+                        if len(text.strip()) < 50:
+                            logger.warning(f"⚠️ Very little text extracted: '{text.strip()}'")
+                            return f"Error: PDF appears to be empty or unreadable. Extracted only: '{text.strip()}'"
+                        
+                        # Format as markdown
+                        formatted = format_resume_as_markdown(text)
+                        logger.info(f"📤 Final formatted content: {len(formatted)} chars")
+                        logger.info(f"📤 Preview:\n{formatted[:500]}")
+                        
+                        return formatted
+                        
+                    except ImportError as e:
+                        logger.error(f"❌ PyPDF2 import failed: {e}")
+                        return "Error: PyPDF2 not available for PDF processing"
+                
+                elif filename.lower().endswith(('.docx', '.doc')):
+                    logger.info("📄 Attempting DOCX processing...")
+                    try:
+                        from docx import Document
+                        logger.info("✅ python-docx imported successfully")
+                        
+                        doc = Document(resume_path)
+                        text = ""
+                        for i, paragraph in enumerate(doc.paragraphs):
+                            para_text = paragraph.text
+                            if para_text.strip():
+                                logger.info(f"📄 Paragraph {i+1}: {para_text[:100]}")
+                                text += para_text + "\n"
+                        
+                        logger.info(f"📄 Total extracted: {len(text)} characters")
+                        
+                        if len(text.strip()) < 50:
+                            logger.warning(f"⚠️ Very little text extracted: '{text.strip()}'")
+                            return f"Error: DOCX appears to be empty. Extracted only: '{text.strip()}'"
+                        
+                        formatted = format_resume_as_markdown(text)
+                        logger.info(f"📤 Final formatted content: {len(formatted)} chars")
+                        return formatted
+                        
+                    except ImportError as e:
+                        logger.error(f"❌ python-docx import failed: {e}")
+                        return "Error: python-docx not available for DOCX processing"
+                
+                elif filename.lower().endswith('.txt'):
+                    logger.info("📄 Processing TXT file...")
+                    with open(resume_path, 'r', encoding='utf-8') as file:
+                        text = file.read()
+                    
+                    logger.info(f"📄 TXT content: {len(text)} characters")
+                    logger.info(f"📄 Preview: {text[:200]}")
+                    
+                    if len(text.strip()) < 50:
+                        return f"Error: TXT file appears to be empty. Content: '{text.strip()}'"
+                    
+                    formatted = format_resume_as_markdown(text)
+                    return formatted
+                
+                elif filename.lower().endswith('.md'):
+                    logger.info("📄 Processing MD file...")
+                    with open(resume_path, 'r', encoding='utf-8') as file:
+                        content = file.read()
+                    
+                    logger.info(f"📄 MD content: {len(content)} characters")
+                    logger.info(f"📄 Preview: {content[:200]}")
+                    
+                    if len(content.strip()) < 50:
+                        return f"Error: MD file appears to be empty. Content: '{content.strip()}'"
+                    
+                    return content
+                        
+            except Exception as e:
+                logger.error(f"❌ Error processing {filename}: {e}")
+                import traceback
+                logger.error(f"❌ Full traceback: {traceback.format_exc()}")
+                continue
+    
+    # If no files found, return error message
+    logger.error("❌ No resume files found in deployment")
+    return """
+ERROR: No resume file found in deployment.
 
-Please upload your resume as one of these formats:
+Files checked:
 - resume.pdf
 - resume.docx  
 - resume.txt
 - resume.md
+- bhushan-anokar-resume.pdf
 
-Place the file in the same directory as this server.
+Please ensure your resume file is uploaded to the GitHub repo and redeployed to Railway.
 """
-        
-    except Exception as e:
-        return f"Error processing resume: {str(e)}"
 
+def format_resume_as_markdown(raw_text: str) -> str:
+    """Convert raw extracted text into properly formatted markdown."""
+    if not raw_text or not raw_text.strip():
+        return "Error: No content to format"
+    
+    lines = raw_text.strip().split('\n')
+    formatted_lines = []
+    
+    for line in lines:
+        line = line.strip()
+        if not line:
+            continue
+            
+        # Detect and format headers
+        if any(keyword in line.upper() for keyword in [
+            'EXPERIENCE', 'EDUCATION', 'SKILLS', 'PROJECTS', 'SUMMARY', 
+            'OBJECTIVE', 'CERTIFICATIONS', 'ACHIEVEMENTS', 'CONTACT'
+        ]):
+            formatted_lines.append(f"\n## {line}")
+        
+        # Detect job titles with dates
+        elif any(char in line for char in ['2019', '2020', '2021', '2022', '2023', '2024', '2025']):
+            if '-' in line or 'to' in line.lower() or 'present' in line.lower():
+                formatted_lines.append(f"\n### {line}")
+            else:
+                formatted_lines.append(f"- {line}")
+        
+        # Detect bullet points
+        elif line.startswith(('•', '-', '*', '◦')) or line.startswith(tuple('0123456789')):
+            clean_line = line.lstrip('•-*◦0123456789. ')
+            formatted_lines.append(f"- {clean_line}")
+        
+        # Regular text lines
+        else:
+            formatted_lines.append(line)
+    
+    result = '\n'.join(formatted_lines)
+    logger.info(f"📝 Formatted {len(lines)} lines into {len(result)} characters")
+    return result
 
 def format_resume_as_markdown(raw_text: str) -> str:
     """
