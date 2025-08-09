@@ -1,1 +1,8 @@
-
+fastmcp
+markdownify
+readabilipy
+httpx
+pydantic
+openai
+PyPDF2
+python-docx
