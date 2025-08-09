@@ -116,48 +116,113 @@ ResumeToolDescription = RichToolDescription(
 
 @mcp.tool(description=ResumeToolDescription.model_dump_json())
 async def resume() -> str:
-    """Return your resume exactly as markdown text."""
-    resume_content = """
-# Bhushan Anokar
-**Email:** bhushan.anokar@email.com | **Phone:** +91-7588470501
+    """
+    Return your resume exactly as markdown text.
+    
+    This function processes your actual resume file and converts it to markdown.
+    """
+    try:
+        # Method 1: Process PDF file
+        resume_path = Path("resume.pdf")  # You'll upload this file
+        
+        if resume_path.exists() and resume_path.suffix.lower() == '.pdf':
+            try:
+                import PyPDF2
+                with open(resume_path, 'rb') as file:
+                    pdf_reader = PyPDF2.PdfReader(file)
+                    text = ""
+                    for page in pdf_reader.pages:
+                        text += page.extract_text() + "\n"
+                
+                # Convert extracted text to better markdown format
+                return format_resume_as_markdown(text)
+                
+            except ImportError:
+                return "Error: PyPDF2 not available for PDF processing"
+        
+        # Method 2: Process DOCX file
+        resume_path = Path("resume.docx")
+        if resume_path.exists() and resume_path.suffix.lower() == '.docx':
+            try:
+                from docx import Document
+                doc = Document(resume_path)
+                text = ""
+                for paragraph in doc.paragraphs:
+                    text += paragraph.text + "\n"
+                
+                return format_resume_as_markdown(text)
+                
+            except ImportError:
+                return "Error: python-docx not available for DOCX processing"
+        
+        # Method 3: Process plain text file
+        resume_path = Path("resume.txt")
+        if resume_path.exists():
+            with open(resume_path, 'r', encoding='utf-8') as file:
+                text = file.read()
+            return format_resume_as_markdown(text)
+        
+        # Method 4: Process markdown file directly
+        resume_path = Path("resume.md")
+        if resume_path.exists():
+            with open(resume_path, 'r', encoding='utf-8') as file:
+                return file.read()
+        
+        # Fallback: No resume file found
+        return """
+# Resume Not Found
 
-## Professional Summary
-Experienced software developer with expertise in web technologies and system integration.
+Please upload your resume as one of these formats:
+- resume.pdf
+- resume.docx  
+- resume.txt
+- resume.md
 
-## Experience
-
-### Software Developer - Tech Company (2022 - Present)
-- Developed web applications using modern frameworks
-- Collaborated with cross-functional teams
-- Implemented efficient solutions for complex problems
-
-### Junior Developer - Previous Company (2020 - 2022)
-- Built responsive web interfaces
-- Worked on backend API development
-- Participated in code reviews and testing
-
-## Education
-
-### Bachelor's Degree in Computer Science - University Name (2020)
-- Relevant coursework in software engineering and algorithms
-
-## Technical Skills
-- **Languages:** Python, JavaScript, HTML, CSS
-- **Frameworks:** React, Node.js, Django
-- **Tools:** Git, Docker, VS Code
-- **Databases:** MySQL, PostgreSQL
-
-## Projects
-
-### Web Application Project
-- Built a full-stack web application
-- Used modern development practices
-- Deployed to cloud platform
-
-## Certifications
-- Relevant certification in web development (2023)
+Place the file in the same directory as this server.
 """
-    return resume_content.strip()
+        
+    except Exception as e:
+        return f"Error processing resume: {str(e)}"
+
+
+def format_resume_as_markdown(raw_text: str) -> str:
+    """
+    Convert raw extracted text into properly formatted markdown.
+    This function intelligently formats the resume text.
+    """
+    lines = raw_text.strip().split('\n')
+    formatted_lines = []
+    
+    for line in lines:
+        line = line.strip()
+        if not line:
+            continue
+            
+        # Detect and format headers (common resume section titles)
+        if any(keyword in line.upper() for keyword in [
+            'EXPERIENCE', 'EDUCATION', 'SKILLS', 'PROJECTS', 'SUMMARY', 
+            'OBJECTIVE', 'CERTIFICATIONS', 'ACHIEVEMENTS', 'CONTACT'
+        ]):
+            formatted_lines.append(f"\n## {line}")
+        
+        # Detect job titles or positions (lines with dates)
+        elif any(char in line for char in ['2019', '2020', '2021', '2022', '2023', '2024', '2025']):
+            if '-' in line or 'to' in line.lower() or 'present' in line.lower():
+                formatted_lines.append(f"\n### {line}")
+            else:
+                formatted_lines.append(f"- {line}")
+        
+        # Detect bullet points (lines starting with common indicators)
+        elif line.startswith(('•', '-', '*', '◦')) or line.startswith(tuple('0123456789')):
+            # Clean up and format as markdown bullet
+            clean_line = line.lstrip('•-*◦0123456789. ')
+            formatted_lines.append(f"- {clean_line}")
+        
+        # Regular text lines
+        else:
+            formatted_lines.append(line)
+    
+    return '\n'.join(formatted_lines)
 
 @mcp.tool
 async def validate() -> str:
